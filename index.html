@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>대한민국 슈퍼 경찰 백시윤 - 전술 통제 패널</title>
+    <style>
+        :root {
+            --bg: #050505;
+            --panel: #1a1a1a;
+            --blue: #0080ff;
+            --red: #ff0000;
+            --green: #00ff41;
+            --gold: #ffd700;
+        }
+
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg);
+            background-image: linear-gradient(0deg, #111 1px, transparent 1px), linear-gradient(90deg, #111 1px, transparent 1px);
+            background-size: 30px 30px;
+            color: #eee; font-family: 'Pretendard', sans-serif;
+            overflow: hidden; height: 100vh; display: flex; flex-direction: column;
+        }
+
+        /* 부팅 화면 */
+        #boot-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 1000; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+        }
+        .start-btn {
+            background: #111; color: var(--gold); border: 2px solid var(--gold);
+            padding: 30px 60px; font-size: 2.5rem; font-weight: bold; cursor: pointer;
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.3); letter-spacing: 5px;
+        }
+
+        /* 상단 타이틀 구역 */
+        .header {
+            text-align: center; padding: 20px; background: #000;
+            border-bottom: 4px solid var(--gold);
+            box-shadow: 0 5px 20px rgba(255, 215, 0, 0.2);
+        }
+        .header h1 {
+            margin: 0; font-size: 3.5rem; color: var(--gold);
+            text-shadow: 2px 2px 0px #333, 0 0 15px rgba(255, 215, 0, 0.6);
+            font-weight: 900; letter-spacing: 2px;
+        }
+
+        /* 경광등 애니메이션 바 */
+        .light-bar { display: flex; height: 15px; width: 100%; background: #000; }
+        .unit { flex: 1; border: 0.5px solid #111; opacity: 0.1; }
+
+        /* 메인 그리드 */
+        .dashboard {
+            flex: 1; display: grid; grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: repeat(2, 1fr); gap: 15px; padding: 20px;
+        }
+
+        /* 택티컬 버튼 */
+        .btn {
+            background: linear-gradient(145deg, #222, #0a0a0a);
+            border: 1px solid #333; border-radius: 12px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer; transition: 0.1s; position: relative;
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.8);
+        }
+        .btn:active { transform: scale(0.95); background: #333; }
+        .btn .label { font-size: 1.4rem; font-weight: bold; color: #bbb; margin-top: 10px; }
+        .btn .sub { font-size: 0.7rem; color: #555; margin-top: 5px; text-transform: uppercase; }
+
+        /* 상태 LED */
+        .led { width: 50px; height: 6px; border-radius: 3px; background: #222; margin-bottom: 10px; }
+        .active-blue .led { background: var(--blue); box-shadow: 0 0 15px var(--blue); }
+        .active-red .led { background: var(--red); box-shadow: 0 0 15px var(--red); }
+        .active-green .led { background: var(--green); box-shadow: 0 0 15px var(--green); }
+
+        /* HUD 메시지 */
+        #hud {
+            height: 60px; background: #000; border-top: 1px solid #222;
+            display: flex; align-items: center; padding: 0 30px;
+            color: var(--green); font-family: monospace; font-size: 1.2rem;
+        }
+
+        /* 레이더 */
+        #radar {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 300px; height: 300px; border: 2px solid #004400;
+            border-radius: 50%; background: rgba(0, 20, 0, 0.9); display: none;
+        }
+        .sweep {
+            width: 100%; height: 100%; border-radius: 50%;
+            background: conic-gradient(from 0deg, transparent 80%, rgba(0, 255, 0, 0.4) 100%);
+            animation: sweep 2s linear infinite;
+        }
+        @keyframes sweep { to { transform: rotate(360deg); } }
+
+        .night-vision { filter: brightness(0.8) sepia(100%) hue-rotate(80deg) contrast(1.5); }
+        @keyframes shake { 0% {transform:translate(2px,2px)} 50% {transform:translate(-2px,-2px)} 100% {transform:translate(2px,2px)} }
+    </style>
+</head>
+<body>
+
+<div id="boot-screen">
+    <h1 style="color:white; margin-bottom:40px;">POLICE SYSTEM V8.0</h1>
+    <button class="start-btn" onclick="startSystem()">시스템 시작</button>
+</div>
+
+<div class="light-bar">
+    <div class="unit"></div><div class="unit"></div><div class="unit"></div><div class="unit"></div>
+    <div class="unit"></div><div class="unit"></div><div class="unit"></div><div class="unit"></div>
+</div>
+
+<header class="header">
+    <h1>대한민국 슈퍼 경찰 백시윤</h1>
+</header>
+
+<div class="dashboard">
+    <div class="btn" onclick="dispatch()">
+        <div class="led"></div>
+        <div class="label">긴급 출동</div>
+        <div class="sub">Dispatch Unit</div>
+    </div>
+    <div class="btn" id="l-btn" onclick="toggleLights()">
+        <div class="led"></div>
+        <div class="label">경광등</div>
+        <div class="sub">Emergency Lights</div>
+    </div>
+    <div class="btn" id="s-btn" onclick="toggleSiren()">
+        <div class="led"></div>
+        <div class="label">사이렌</div>
+        <div class="sub">Siren System</div>
+    </div>
+    <div class="btn" onclick="scan()">
+        <div class="led"></div>
+        <div class="label">범인 스캔</div>
+        <div class="sub">Target Scan</div>
+    </div>
+    <div class="btn" id="b-btn" onclick="booster()">
+        <div class="led"></div>
+        <div class="label">부스터</div>
+        <div class="sub">N2O Boost</div>
+    </div>
+    <div class="btn" onclick="radio()">
+        <div class="led"></div>
+        <div class="label">무전기</div>
+        <div class="sub">Radio Comms</div>
+    </div>
+    <div class="btn" onclick="hq()">
+        <div class="led"></div>
+        <div class="label">본부 연결</div>
+        <div class="sub">HQ Link</div>
+    </div>
+    <div class="btn" id="n-btn" onclick="nightVision()">
+        <div class="led"></div>
+        <div class="label">야간 모드</div>
+        <div class="sub">Night Vision</div>
+    </div>
+    <div class="btn" onclick="emergencyStop()">
+        <div class="led"></div>
+        <div class="label">긴급 정지</div>
+        <div class="sub">System Brake</div>
+    </div>
+    <div class="btn" onclick="missionEnd()">
+        <div class="led"></div>
+        <div class="label">임무 완료</div>
+        <div class="sub">Mission End</div>
+    </div>
+</div>
+
+<div id="hud">SYSTEM READY...</div>
+<div id="radar"><div class="sweep"></div></div>
+
+<script>
+    let aCtx, sirenInterval, lightInterval;
+    let sirenType = 0;
+    let lightsOn = false;
+
+    // [중요] 남성 목소리 강제 설정 함수
+    function speak(text) {
+        window.speechSynthesis.cancel();
+        const msg = new SpeechSynthesisUtterance(text);
+        msg.lang = 'ko-KR';
+
+        // 1. 시스템에서 남성 목소리 찾기 (민준, 대호, Google 남성 등)
+        const voices = window.speechSynthesis.getVoices();
+        const maleVoice = voices.find(v => v.lang.includes('ko') && (v.name.includes('Male') || v.name.includes('남자') || v.name.includes('민준')));
+        
+        if (maleVoice) {
+            msg.voice = maleVoice;
+        }
+
+        // 2. 목소리 톤을 아주 낮게 설정 (여성 목소리라도 아저씨처럼 들리게 함)
+        msg.pitch = 0.5; // 0.1 ~ 2.0 (낮을수록 저음)
+        msg.rate = 0.9;  // 약간 천천히 말해 권위 있게 함
+        
+        window.speechSynthesis.speak(msg);
+    }
+
+    // 브라우저에서 목소리 목록이 로드될 때 미리 남성 목소리 준비
+    window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.getVoices(); };
+
+    function haptic(ms) { if (navigator.vibrate) navigator.vibrate(ms); }
+    function setHud(text) { document.getElementById('hud').innerText = "STATUS: " + text; }
+
+    function startSystem() {
+        aCtx = new (window.AudioContext || window.webkitAudioContext)();
+        document.getElementById('boot-screen').style.display = 'none';
+        speak("시스템 가동. 백시윤 경관님, 오늘도 도시를 지켜주십시오.");
+        setHud("POLICE SYSTEM ONLINE - UNIT BAEK SI YOON");
+    }
+
+    function dispatch() {
+        haptic([100, 50, 100]);
+        speak("긴급 상황 발생. 백시윤 경관, 즉시 현장으로 이동하라.");
+        setHud("CODE 3 DISPATCH - IMMEDIATE RESPONSE REQUIRED");
+    }
+
+    function toggleLights() {
+        const btn = document.getElementById('l-btn');
+        lightsOn = !lightsOn;
+        haptic(50);
+        if (lightsOn) {
+            btn.classList.add('active-red');
+            lightInterval = setInterval(() => {
+                const units = document.querySelectorAll('.unit');
+                const phase = Math.floor(Date.now() / 80) % 2;
+                units.forEach((u, i) => {
+                    const isLeft = i < 4;
+                    u.style.opacity = (phase === 0 && isLeft) || (phase === 1 && !isLeft) ? "1" : "0.1";
+                    u.style.backgroundColor = isLeft ? "blue" : "red";
+                    u.style.boxShadow = u.style.opacity === "1" ? `0 0 20px ${u.style.backgroundColor}` : "none";
+                });
+            }, 80);
+        } else {
+            btn.classList.remove('active-red');
+            clearInterval(lightInterval);
+            document.querySelectorAll('.unit').forEach(u => u.style.opacity = "0.1");
+        }
+    }
+
+    function toggleSiren() {
+        const btn = document.getElementById('s-btn');
+        sirenType = (sirenType + 1) % 4;
+        haptic(50);
+        if (sirenInterval) clearInterval(sirenInterval);
+        if (sirenType === 0) { btn.classList.remove('active-blue'); setHud("SIREN OFF"); return; }
+        
+        btn.classList.add('active-blue');
+        setHud("SIREN ACTIVE - MODE " + sirenType);
+        sirenInterval = setInterval(() => {
+            const osc = aCtx.createOscillator();
+            const g = aCtx.createGain();
+            osc.type = 'square';
+            let f = 600;
+            const t = Date.now();
+            if(sirenType===1) f = 500 + Math.sin(t/500)*300;
+            if(sirenType===2) f = 600 + Math.sin(t/100)*400;
+            if(sirenType===3) f = (t % 200 < 100) ? 800 : 1200;
+            osc.frequency.setValueAtTime(f, aCtx.currentTime);
+            g.gain.setValueAtTime(0.04, aCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.01, aCtx.currentTime + 0.12);
+            osc.connect(g); g.connect(aCtx.destination);
+            osc.start(); osc.stop(aCtx.currentTime + 0.12);
+        }, 120);
+    }
+
+    function scan() {
+        const r = document.getElementById('radar');
+        r.style.display = 'block';
+        haptic([40, 40, 40]);
+        setHud("SCANNING AREA...");
+        setTimeout(() => {
+            r.style.display = 'none';
+            speak("타겟 포착. 도주 중인 용의 차량을 발견했다.");
+            setHud("TARGET LOCKED: SUSPECT VEHICLE DETECTED");
+        }, 3000);
+    }
+
+    function booster() {
+        haptic(1000);
+        speak("부스터 엔진 출력 최대. 속도 무제한.");
+        document.body.style.animation = "shake 0.1s infinite";
+        document.getElementById('b-btn').classList.add('active-green');
+        setTimeout(() => {
+            document.body.style.animation = "";
+            document.getElementById('b-btn').classList.remove('active-green');
+        }, 2000);
+    }
+
+    function radio() {
+        haptic(50);
+        // 치익 노이즈
+        const b = aCtx.createBuffer(1, aCtx.sampleRate * 0.15, aCtx.sampleRate);
+        const d = b.getChannelData(0);
+        for(let i=0; i<d.length; i++) d[i] = Math.random() * 0.15;
+        const s = aCtx.createBufferSource(); s.buffer = b;
+        s.connect(aCtx.destination); s.start();
+        setTimeout(() => speak("본부 들리는가? 여기는 백시윤 경관. 용의자 추격 중이다. 오버."), 250);
+    }
+
+    function hq() {
+        speak("본부 보고합니다. 현재 시각부로 구역 정밀 순찰 중. 이상 없습니다.");
+        setHud("HQ COMMUNICATION ESTABLISHED");
+    }
+
+    function nightVision() {
+        document.body.classList.toggle('night-vision');
+        const active = document.body.classList.contains('night-vision');
+        document.getElementById('n-btn').classList.toggle('active-green', active);
+        speak(active ? "야간 투시 시스템 가동." : "일반 모드 전환.");
+    }
+
+    function emergencyStop() {
+        haptic([100, 50, 100, 50, 800]);
+        speak("긴급 정지. 전 시스템 브레이크 작동.");
+        sirenType = 0; clearInterval(sirenInterval);
+        document.getElementById('s-btn').classList.remove('active-blue');
+        setHud("EMERGENCY BRAKE APPLIED");
+    }
+
+    function missionEnd() {
+        speak("임무 완료. 오늘도 평화를 지켰다. 백시윤 경관, 본부로 귀소하라.");
+        setHud("MISSION COMPLETE - WELL DONE OFFICER");
+        haptic([100, 100, 100, 500]);
+    }
+</script>
+</body>
+</html>
