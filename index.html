@@ -19,7 +19,7 @@
             background-color: var(--bg);
             background-image: linear-gradient(0deg, #111 1px, transparent 1px), linear-gradient(90deg, #111 1px, transparent 1px);
             background-size: 30px 30px;
-            color: #eee; font-family: 'Pretendard', sans-serif;
+            color: #eee; font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
             overflow: hidden; height: 100vh; display: flex; flex-direction: column;
         }
 
@@ -33,6 +33,7 @@
             background: #111; color: var(--gold); border: 2px solid var(--gold);
             padding: 30px 60px; font-size: 2.5rem; font-weight: bold; cursor: pointer;
             box-shadow: 0 0 30px rgba(255, 215, 0, 0.3); letter-spacing: 5px;
+            border-radius: 10px;
         }
 
         /* 상단 타이틀 구역 */
@@ -102,7 +103,7 @@
 <body>
 
 <div id="boot-screen">
-    <h1 style="color:white; margin-bottom:40px;">POLICE SYSTEM V8.0</h1>
+    <h1 style="color:white; margin-bottom:40px;">POLICE SYSTEM V9.0</h1>
     <button class="start-btn" onclick="startSystem()">시스템 시작</button>
 </div>
 
@@ -172,33 +173,92 @@
 <div id="radar"><div class="sweep"></div></div>
 
 <script>
-    let aCtx, sirenInterval, lightInterval;
-    let sirenType = 0;
+    let aCtx, lightInterval;
+    let sirenOsc = null;
+    let sirenGain = null;
+    let sirenType = 0; // 0:Off, 1:Wail, 2:Yelp, 3:HiLo
     let lightsOn = false;
+    let maleVoice = null;
 
-    // [중요] 남성 목소리 강제 설정 함수
+    // 1. 남성 목소리 엔진 최적화
+    function loadVoices() {
+        const voices = window.speechSynthesis.getVoices();
+        // 한국어 남성 목소리 탐색 (민준, Google 남성, 대호 등)
+        maleVoice = voices.find(v => v.lang.includes('ko') && (v.name.includes('Male') || v.name.includes('남성') || v.name.includes('민준') || v.name.includes('대호')));
+        if (!maleVoice) {
+            maleVoice = voices.find(v => v.lang.includes('ko')); // 남성 엔진 없으면 일반 한국어라도 사용
+        }
+    }
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    loadVoices();
+
     function speak(text) {
         window.speechSynthesis.cancel();
         const msg = new SpeechSynthesisUtterance(text);
         msg.lang = 'ko-KR';
-
-        // 1. 시스템에서 남성 목소리 찾기 (민준, 대호, Google 남성 등)
-        const voices = window.speechSynthesis.getVoices();
-        const maleVoice = voices.find(v => v.lang.includes('ko') && (v.name.includes('Male') || v.name.includes('남자') || v.name.includes('민준')));
+        if (maleVoice) msg.voice = maleVoice;
         
-        if (maleVoice) {
-            msg.voice = maleVoice;
-        }
-
-        // 2. 목소리 톤을 아주 낮게 설정 (여성 목소리라도 아저씨처럼 들리게 함)
-        msg.pitch = 0.5; // 0.1 ~ 2.0 (낮을수록 저음)
-        msg.rate = 0.9;  // 약간 천천히 말해 권위 있게 함
-        
+        // 자연스러운 남성톤을 위해 미세 조정 (억지스럽지 않게)
+        msg.pitch = maleVoice && maleVoice.name.includes('Male') ? 1.0 : 0.85; 
+        msg.rate = 0.95; 
         window.speechSynthesis.speak(msg);
     }
 
-    // 브라우저에서 목소리 목록이 로드될 때 미리 남성 목소리 준비
-    window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.getVoices(); };
+    // 2. 현실적인 사이렌 주파수 제어 (Web Audio API)
+    function stopSiren() {
+        if (sirenOsc) {
+            sirenOsc.stop();
+            sirenOsc.disconnect();
+            sirenOsc = null;
+        }
+        if (sirenGain) {
+            sirenGain.disconnect();
+            sirenGain = null;
+        }
+    }
+
+    function playSiren(type) {
+        stopSiren();
+        if (type === 0) return;
+
+        aCtx.resume();
+        sirenOsc = aCtx.createOscillator();
+        sirenGain = aCtx.createGain();
+        sirenOsc.type = 'triangle'; // 실제 사이렌 스피커와 유사한 배음
+        
+        sirenGain.gain.setValueAtTime(0.1, aCtx.currentTime);
+        sirenOsc.connect(sirenGain);
+        sirenGain.connect(aCtx.destination);
+
+        const now = aCtx.currentTime;
+
+        if (type === 1) { // WAIL: 긴 호흡의 한국 경찰 사이렌
+            const cycle = 4.0; 
+            const freq = sirenOsc.frequency;
+            freq.setValueAtTime(400, now);
+            for(let i=0; i<100; i++) {
+                freq.exponentialRampToValueAtTime(1100, now + (i*cycle) + (cycle/2));
+                freq.exponentialRampToValueAtTime(400, now + (i*cycle) + cycle);
+            }
+        } else if (type === 2) { // YELP: 급박한 빠른 사이렌
+            const cycle = 0.5;
+            const freq = sirenOsc.frequency;
+            freq.setValueAtTime(500, now);
+            for(let i=0; i<200; i++) {
+                freq.exponentialRampToValueAtTime(1200, now + (i*cycle) + (cycle/2));
+                freq.exponentialRampToValueAtTime(500, now + (i*cycle) + cycle);
+            }
+        } else if (type === 3) { // HI-LO: 고저음 경보
+            const cycle = 0.8;
+            const freq = sirenOsc.frequency;
+            for(let i=0; i<100; i++) {
+                freq.setValueAtTime(900, now + (i*cycle));
+                freq.setValueAtTime(600, now + (i*cycle) + (cycle/2));
+            }
+        }
+        
+        sirenOsc.start();
+    }
 
     function haptic(ms) { if (navigator.vibrate) navigator.vibrate(ms); }
     function setHud(text) { document.getElementById('hud').innerText = "STATUS: " + text; }
@@ -206,14 +266,14 @@
     function startSystem() {
         aCtx = new (window.AudioContext || window.webkitAudioContext)();
         document.getElementById('boot-screen').style.display = 'none';
-        speak("시스템 가동. 백시윤 경관님, 오늘도 도시를 지켜주십시오.");
-        setHud("POLICE SYSTEM ONLINE - UNIT BAEK SI YOON");
+        speak("시스템 가동. 백시윤 경관님, 환영합니다.");
+        setHud("POLICE TACTICAL SYSTEM ONLINE");
     }
 
     function dispatch() {
         haptic([100, 50, 100]);
-        speak("긴급 상황 발생. 백시윤 경관, 즉시 현장으로 이동하라.");
-        setHud("CODE 3 DISPATCH - IMMEDIATE RESPONSE REQUIRED");
+        speak("현 시각 부로 코드 3 긴급 상황 발생. 백시윤 경관님, 현장으로 출동하십시오.");
+        setHud("CODE 3 DISPATCH - IMMEDIATE RESPONSE");
     }
 
     function toggleLights() {
@@ -243,45 +303,49 @@
         const btn = document.getElementById('s-btn');
         sirenType = (sirenType + 1) % 4;
         haptic(50);
-        if (sirenInterval) clearInterval(sirenInterval);
-        if (sirenType === 0) { btn.classList.remove('active-blue'); setHud("SIREN OFF"); return; }
+        
+        if (sirenType === 0) { 
+            btn.classList.remove('active-blue'); 
+            stopSiren();
+            setHud("SIREN SYSTEM STANDBY"); 
+            return; 
+        }
         
         btn.classList.add('active-blue');
-        setHud("SIREN ACTIVE - MODE " + sirenType);
-        sirenInterval = setInterval(() => {
-            const osc = aCtx.createOscillator();
-            const g = aCtx.createGain();
-            osc.type = 'square';
-            let f = 600;
-            const t = Date.now();
-            if(sirenType===1) f = 500 + Math.sin(t/500)*300;
-            if(sirenType===2) f = 600 + Math.sin(t/100)*400;
-            if(sirenType===3) f = (t % 200 < 100) ? 800 : 1200;
-            osc.frequency.setValueAtTime(f, aCtx.currentTime);
-            g.gain.setValueAtTime(0.04, aCtx.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.01, aCtx.currentTime + 0.12);
-            osc.connect(g); g.connect(aCtx.destination);
-            osc.start(); osc.stop(aCtx.currentTime + 0.12);
-        }, 120);
+        const modes = ["", "WAIL", "YELP", "HI-LO"];
+        setHud("SIREN ACTIVE: " + modes[sirenType]);
+        playSiren(sirenType);
     }
 
     function scan() {
         const r = document.getElementById('radar');
         r.style.display = 'block';
         haptic([40, 40, 40]);
-        setHud("SCANNING AREA...");
+        setHud("AREA SCANNING...");
         setTimeout(() => {
             r.style.display = 'none';
-            speak("타겟 포착. 도주 중인 용의 차량을 발견했다.");
-            setHud("TARGET LOCKED: SUSPECT VEHICLE DETECTED");
+            speak("범인 포착. 10시 방향 용의 차량이 발견되었습니다.");
+            setHud("TARGET ACQUIRED - TRACKING START");
         }, 3000);
     }
 
     function booster() {
         haptic(1000);
-        speak("부스터 엔진 출력 최대. 속도 무제한.");
+        speak("부스터 가동. 엔진 최대 출력.");
         document.body.style.animation = "shake 0.1s infinite";
         document.getElementById('b-btn').classList.add('active-green');
+        
+        // 부스터 소리
+        const osc = aCtx.createOscillator();
+        const g = aCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(50, aCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(400, aCtx.currentTime + 2);
+        g.gain.setValueAtTime(0.05, aCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, aCtx.currentTime + 2);
+        osc.connect(g); g.connect(aCtx.destination);
+        osc.start(); osc.stop(aCtx.currentTime + 2);
+
         setTimeout(() => {
             document.body.style.animation = "";
             document.getElementById('b-btn').classList.remove('active-green');
@@ -290,40 +354,43 @@
 
     function radio() {
         haptic(50);
-        // 치익 노이즈
         const b = aCtx.createBuffer(1, aCtx.sampleRate * 0.15, aCtx.sampleRate);
         const d = b.getChannelData(0);
-        for(let i=0; i<d.length; i++) d[i] = Math.random() * 0.15;
+        for(let i=0; i<d.length; i++) d[i] = Math.random() * 0.1;
         const s = aCtx.createBufferSource(); s.buffer = b;
         s.connect(aCtx.destination); s.start();
-        setTimeout(() => speak("본부 들리는가? 여기는 백시윤 경관. 용의자 추격 중이다. 오버."), 250);
+        setTimeout(() => speak("본부 나와라. 여기는 백시윤 경관. 용의자를 추격 중이다. 지원 바람. 오버."), 200);
     }
 
     function hq() {
-        speak("본부 보고합니다. 현재 시각부로 구역 정밀 순찰 중. 이상 없습니다.");
-        setHud("HQ COMMUNICATION ESTABLISHED");
+        speak("현재 상황 보고합니다. 시내 순찰 중 특이사항 없음. 이상.");
+        setHud("ENCRYPTED HQ LINK ACTIVE");
     }
 
     function nightVision() {
         document.body.classList.toggle('night-vision');
         const active = document.body.classList.contains('night-vision');
         document.getElementById('n-btn').classList.toggle('active-green', active);
-        speak(active ? "야간 투시 시스템 가동." : "일반 모드 전환.");
+        speak(active ? "야간 투시경 가동." : "표준 시야 모드 전환.");
     }
 
     function emergencyStop() {
         haptic([100, 50, 100, 50, 800]);
-        speak("긴급 정지. 전 시스템 브레이크 작동.");
-        sirenType = 0; clearInterval(sirenInterval);
+        speak("긴급 정지! 전 시스템 브레이크 작동!");
+        sirenType = 0; stopSiren();
         document.getElementById('s-btn').classList.remove('active-blue');
-        setHud("EMERGENCY BRAKE APPLIED");
+        setHud("EMERGENCY BRAKE ENGAGED");
     }
 
     function missionEnd() {
-        speak("임무 완료. 오늘도 평화를 지켰다. 백시윤 경관, 본부로 귀소하라.");
-        setHud("MISSION COMPLETE - WELL DONE OFFICER");
-        haptic([100, 100, 100, 500]);
+        speak("오늘도 고생하셨습니다, 백시윤 경관님. 오늘도 평화로운 하루입니다. 작전 종료.");
+        setHud("MISSION SUCCESSFUL - UNIT RETURNING");
+        haptic([100, 100, 500]);
     }
+
+    const st = document.createElement('style');
+    st.innerHTML = `@keyframes shake { 0%{transform:translate(2px,2px)} 50%{transform:translate(-2px,-2px)} 100%{transform:translate(2px,2px)} }`;
+    document.head.appendChild(st);
 </script>
 </body>
 </html>
